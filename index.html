@@ -1199,7 +1199,17 @@ const state = {
   drafted: new Set(saved ? saved.drafted : []),
   myTeam: (saved && saved.myTeam) ? saved.myTeam : {},
   draftRoom: (saved && saved.draftRoom) ? saved.draftRoom : { participants: [], currentIndex: 0, picks: [], started: false },
-  theme: (saved && saved.theme) || "auto",
+  // Defaults to dark (the actual designed look, see the broadcast-desk
+  // palette above) rather than "auto" -- "auto" followed the phone's OS
+  // light/dark setting, which on a phone in Light mode (esp. with iOS Night
+  // Shift's evening warm tint) rendered as a washed-out cream page instead
+  // of the intended dark navy/ice-blue theme. Still fully overridable via
+  // the theme toggle for anyone who prefers light. A saved "auto" is
+  // treated the same as never-chosen and migrated forward to "dark" too --
+  // "auto" was the only possible default before this change, so a saved
+  // copy of it just means the toggle was never touched, not a deliberate
+  // pick (same reasoning as LEGACY_DEFAULT_WEIGHTS above).
+  theme: (saved && saved.theme && saved.theme !== "auto") ? saved.theme : "dark",
   teamTheme: (saved && saved.teamTheme) || "",
   featured: null,
   view: "board",
