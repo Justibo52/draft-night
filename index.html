@@ -647,7 +647,9 @@ main.stage{
 @media (max-width: 860px){ .draftroom-layout{ grid-template-columns:1fr; } }
 .draftroom-side{ background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:16px; position:sticky; top:16px; }
 .draftroom-side h4{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:10px; }
-.dr-order-row{ display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; font-size:12.5px; color:var(--text-dim); }
+.dr-order-row{ display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; font-size:12.5px; color:var(--text-dim); transition:opacity .15s, border-color .15s; border:1px solid transparent; }
+.dr-order-row.dragging{ opacity:0.4; }
+.dr-order-row.drag-over{ border-color:var(--ice); box-shadow:0 0 0 2px var(--ice-dim); }
 .dr-order-row.on-clock{ background:var(--gold-dim); color:var(--gold); font-weight:800; }
 .dr-order-row .pos{ font-family:var(--font-mono); color:var(--text-dimmer); width:20px; flex:none; }
 .dr-order-row .tag{ margin-left:auto; font-size:9.5px; font-weight:800; color:var(--text-dimmer); }
@@ -2492,6 +2494,39 @@ function drConfirmPick(){
   const nextInput = document.getElementById("drPickInput");
   if(nextInput) nextInput.focus();
 }
+// Shared drag-to-reorder wiring for a list of draggable="true" rows with
+// data-idx attributes -- used by both the setup screen's participant list
+// and the always-visible sidebar mirror (renderDrOrderSidebar) so dragging
+// works from whichever one is on screen, not just the setup list.
+function wireDragReorder(container, arr, onChange){
+  let dragFromIdx = null;
+  container.querySelectorAll('[draggable="true"]').forEach(row=>{
+    row.addEventListener("dragstart", (e)=>{
+      dragFromIdx = parseInt(row.dataset.idx);
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", ()=>{
+      row.classList.remove("dragging");
+      container.querySelectorAll(".drag-over").forEach(r=>r.classList.remove("drag-over"));
+    });
+    row.addEventListener("dragover", (e)=>{
+      e.preventDefault();
+      if(dragFromIdx===null || row.dataset.idx==dragFromIdx) return;
+      container.querySelectorAll(".drag-over").forEach(r=>r.classList.remove("drag-over"));
+      row.classList.add("drag-over");
+    });
+    row.addEventListener("drop", (e)=>{
+      e.preventDefault();
+      const toIdx = parseInt(row.dataset.idx);
+      if(dragFromIdx===null || toIdx===dragFromIdx) return;
+      const [moved] = arr.splice(dragFromIdx, 1);
+      arr.splice(toIdx, 0, moved);
+      dragFromIdx = null;
+      saveLocal(); onChange();
+    });
+  });
+}
 function renderDraftRoom(){
   const dr = state.draftRoom;
   const setupEl = document.getElementById("drSetup");
@@ -2525,33 +2560,7 @@ function renderDraftRoom(){
       dr.participants.forEach((pt,i)=>{ pt.isMe = (i===parseInt(r.dataset.idx)); });
       saveLocal(); renderDraftRoom();
     }));
-    let dragFromIdx = null;
-    list.querySelectorAll('.dr-participant').forEach(row=>{
-      row.addEventListener("dragstart", (e)=>{
-        dragFromIdx = parseInt(row.dataset.idx);
-        row.classList.add("dragging");
-        e.dataTransfer.effectAllowed = "move";
-      });
-      row.addEventListener("dragend", ()=>{
-        row.classList.remove("dragging");
-        list.querySelectorAll(".drag-over").forEach(r=>r.classList.remove("drag-over"));
-      });
-      row.addEventListener("dragover", (e)=>{
-        e.preventDefault();
-        if(dragFromIdx===null || row.dataset.idx==dragFromIdx) return;
-        list.querySelectorAll(".drag-over").forEach(r=>r.classList.remove("drag-over"));
-        row.classList.add("drag-over");
-      });
-      row.addEventListener("drop", (e)=>{
-        e.preventDefault();
-        const toIdx = parseInt(row.dataset.idx);
-        if(dragFromIdx===null || toIdx===dragFromIdx) return;
-        const [moved] = dr.participants.splice(dragFromIdx, 1);
-        dr.participants.splice(toIdx, 0, moved);
-        dragFromIdx = null;
-        saveLocal(); renderDraftRoom();
-      });
-    });
+    wireDragReorder(list, dr.participants, renderDraftRoom);
     document.getElementById("drAddBtn").addEventListener("click", drAddParticipant);
     document.getElementById("drNameInput").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); drAddParticipant(); } });
     const startBtn = document.getElementById("drStartBtn");
@@ -2594,10 +2603,17 @@ function renderDrOrderSidebar(){
   }
   const n = dr.participants.length;
   const onClockIdx = dr.started ? drSnakeOrder(n, dr.currentIndex).participantIdx : -1;
+  // Reordering is only safe before the draft starts -- once picks are
+  // logged they're recorded against specific slots in the snake order, so
+  // shuffling participants after the fact would desync the pick history.
+  const reorderable = !dr.started;
   el.innerHTML = '<h4>Draft order</h4>' + dr.participants.map((pt,i)=>
-    '<div class="dr-order-row'+(i===onClockIdx?' on-clock':'')+'"><span class="pos mono">'+(i+1)+'</span><span>'+esc(pt.name)+'</span>'+
+    '<div class="dr-order-row'+(i===onClockIdx?' on-clock':'')+'"'+(reorderable?' draggable="true" data-idx="'+i+'"':'')+'>'+
+    (reorderable?'<span class="drag-handle" title="Drag to reorder">&#8942;&#8942;</span>':'')+
+    '<span class="pos mono">'+(i+1)+'</span><span>'+esc(pt.name)+'</span>'+
     (pt.isMe?'<span class="tag">YOU</span>':'')+(i===onClockIdx?'<span class="tag">ON CLOCK</span>':'')+'</div>'
   ).join("");
+  if(reorderable) wireDragReorder(el, dr.participants, renderDraftRoom);
 }
 function buildPlayerDatalist(){
   const dl = document.getElementById("allPlayersList");
