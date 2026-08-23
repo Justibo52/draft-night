@@ -187,6 +187,20 @@ header.broadcast{
 @media (min-width: 768px){
   header.broadcast{ backdrop-filter: blur(10px); }
 }
+/* .control-row (position chips + search + sort + the My Team/Drafted/Full
+   Board/etc. nav buttons) is a single flex row built for desktop width --
+   on a phone it wraps onto 6-7 lines, and since the header is sticky that
+   wrapped stack pins itself across most of the screen permanently ("frozen"
+   top). Two changes below: the header stops being sticky on narrow screens
+   so it just scrolls away like normal content, and the nav buttons that
+   duplicate the bottom dock (My Team/Drafted/Full Board/Scoring Weights/
+   Roster Needs are all also reachable via the dock tabs) are hidden there
+   to shrink the header itself -- Undo, Draft Room and the "?" legend stay
+   since those aren't available anywhere else on mobile. */
+@media (max-width: 767px){
+  header.broadcast{ position: static; }
+  #btnMyTeam, #btnDrafted, #btnBoard, #btnWeights, #btnRosterNeeds{ display:none; }
+}
 .brand-row{
   display:flex; align-items:center; gap:14px;
   padding: 10px 22px;
