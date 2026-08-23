@@ -200,6 +200,10 @@ header.broadcast{
 @media (max-width: 767px){
   header.broadcast{ position: static; }
   #btnMyTeam, #btnDrafted, #btnBoard, #btnWeights, #btnRosterNeeds{ display:none; }
+  /* .brand-row clips overflow (see its own rule) instead of wrapping, which
+     was cutting off the theme toggle + exclude button entirely on a phone
+     -- wrap it here so nothing in it goes unreachable. */
+  .brand-row{ flex-wrap: wrap; overflow: visible; }
 }
 .brand-row{
   display:flex; align-items:center; gap:14px;
@@ -809,7 +813,7 @@ footer.foot-note{ text-align:center; padding: 10px; font-size:10.5px; color: var
       <div class="spacer"><img id="brandThemeLogo" class="brand-theme-logo" alt="" aria-hidden="true"></div>
       <div class="season-pill"><span>SEASON</span><select id="seasonSelect"></select></div>
       <div class="season-pill"><span>TEAM THEME</span><select id="teamThemeSelect"></select></div>
-      <button class="header-icon-btn" id="btnThemeToggle" title="Cycle light / dark / match system">&#9789; <span id="themeToggleLabel">Auto</span></button>
+      <button class="header-icon-btn" id="btnThemeToggle" title="Toggle light / dark">&#9789; <span id="themeToggleLabel">Dark</span></button>
       <button class="header-icon-btn" id="btnExcludeHeader">&#8856; EXCLUDE <span class="count" id="excludeCount">0</span></button>
     </div>
 
@@ -1058,11 +1062,14 @@ function teamColor(t){ return TEAM_COLORS[t] || "#5c6b85"; }
 
 /* ============================== THEME (light/dark toggle + optional
    team-color accent) ============================== */
-const THEME_CYCLE = ["auto","light","dark"];
-const THEME_LABEL = {auto:"Auto", light:"Light", dark:"Dark"};
+// No "auto" (OS-follow) option -- it made the site's actual colors depend
+// on each visitor's phone/OS light-dark setting (and things like iOS Night
+// Shift on top of that), which read as "broken" rather than a deliberate
+// look. Always resolves to an explicit dark or light, dark by default.
+const THEME_CYCLE = ["dark","light"];
+const THEME_LABEL = {light:"Light", dark:"Dark"};
 function applyTheme(){
-  if(state.theme==="auto") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = state.theme;
+  document.documentElement.dataset.theme = state.theme;
   document.getElementById("themeToggleLabel").textContent = THEME_LABEL[state.theme];
   forceStyleRefresh();
 }
