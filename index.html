@@ -179,7 +179,12 @@ header.broadcast{
   background: linear-gradient(180deg, var(--bg-alt) 0%, var(--bg) 100%);
   border-bottom: 3px solid var(--team-theme-color, var(--line));
   box-shadow: 0 2px 24px -8px var(--team-theme-glow, transparent);
-  backdrop-filter: blur(10px);
+}
+/* backdrop-filter on a sticky header forces a re-blur on every scroll
+   frame -- fine on a desktop GPU, a real source of scroll jank on phones.
+   Restrict the frosted-glass look to wider (non-mobile) viewports. */
+@media (min-width: 768px){
+  header.broadcast{ backdrop-filter: blur(10px); }
 }
 .brand-row{
   display:flex; align-items:center; gap:14px;
@@ -1860,7 +1865,21 @@ function computeTopAvailable(n){
   rows.sort((a,b)=>(b.value===null||b.value===undefined?-Infinity:b.value) - (a.value===null||a.value===undefined?-Infinity:a.value));
   return rows.slice(0, n);
 }
+// computeTopAvailable() does a full pass + shrinkage/scarcity math over
+// every skater, independent of whatever's currently on screen -- expensive
+// enough that running it on every single renderAll() (i.e. every keystroke
+// in search, every sort click) was the single biggest source of mobile lag.
+// It only actually needs to change when one of these specific filters
+// changes, so skip the rebuild (DOM included) otherwise.
+let _tickerCacheKey = null;
 function buildTicker(){
+  const key = JSON.stringify([
+    state.hideDrafted, state.minGP, state.minFPPG,
+    Array.from(state.excludeTeams), Array.from(state.excludePlayers),
+    Array.from(state.excludePos), Array.from(state.drafted),
+  ]);
+  if(key === _tickerCacheKey) return;
+  _tickerCacheKey = key;
   // Segments get their own inline label (not just one at the very start)
   // so wherever the infinite scroll happens to land, it's still clear
   // which segment you're looking at. Reported 2026-08-22: the ticker
@@ -2555,7 +2574,14 @@ function buildPlayerDatalist(){
 }
 
 /* ============================== EVENTS ============================== */
-document.getElementById("searchInput").addEventListener("input", e=>{ state.search = e.target.value; state.featured=null; renderAll(); });
+let _searchDebounce = null;
+document.getElementById("searchInput").addEventListener("input", e=>{
+  state.search = e.target.value; state.featured=null;
+  // Typing triggers a full re-rank + table rebuild -- debounce so a fast
+  // typist on a phone isn't forcing that on every single keystroke.
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(renderAll, 150);
+});
 document.getElementById("sortSelect").addEventListener("change", e=>{ state.sortBy = e.target.value; state.sortDir=-1; state.featured=null; renderAll(); });
 document.getElementById("seasonSelect").addEventListener("change", e=>{ state.season = e.target.value; renderAll(); });
 document.getElementById("hideDraftedChk").addEventListener("change", e=>{ state.hideDrafted = e.target.checked; renderAll(); });
@@ -2686,8 +2712,7 @@ document.getElementById("btnDraftRoom").addEventListener("click", showDraftRoomV
 document.getElementById("btnBackToBoard").addEventListener("click", backToBoardView);
 
 /* ============================== RENDER ORCHESTRATION ============================== */
-function renderStage(){
-  const rows = buildRows();
+function renderStage(rows){
   renderHero(rows);
   renderRail(rows);
   document.getElementById("subtitle").textContent =
@@ -2695,11 +2720,16 @@ function renderStage(){
 }
 function renderAll(){
   renderPosChips(); renderSortSelect();
-  renderStage();
+  // buildRows() does a full shrinkage/scarcity pass over the current pool --
+  // compute it once and share it between the hero/rail and the board table
+  // instead of the two independent calls this used to make (was doubling
+  // that cost on every render, notable on mobile CPUs).
+  const rows = buildRows();
+  renderStage(rows);
   renderRosterDock();
   updateFilterBadge();
   buildTicker();
-  if(document.getElementById("panel-board").classList.contains("active")){ renderBoardHead(); renderBoardBody(buildRows()); }
+  if(document.getElementById("panel-board").classList.contains("active")){ renderBoardHead(); renderBoardBody(rows); }
   if(document.getElementById("panel-roster").classList.contains("active")) renderRosterNeedsPanel();
 }
 
