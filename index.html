@@ -1884,7 +1884,10 @@ function excludePlayerByName(raw){
   saveLocal(); updateExcludeCount(); renderExcludePlayerList(); renderAll();
 }
 function updateFilterBadge(){
-  const active = state.minGP>0 || state.minFPPG>0 || state.onlyTeam || state.multiPosOnly;
+  // Min GP defaults to 10, not 0 (see state init) -- comparing against 0
+  // here meant this dot was permanently lit from a brand-new page load,
+  // before anyone had touched a single filter (found 2026-09-05).
+  const active = state.minGP!==10 || state.minFPPG>0 || state.onlyTeam || state.multiPosOnly;
   document.getElementById("filterBadge").style.display = active ? "flex" : "none";
 }
 
