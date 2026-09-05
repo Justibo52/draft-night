@@ -1724,6 +1724,20 @@ function applyValue(rows, isGoalie){
 // filters below (hideDrafted, excludeTeams/Players/Pos, multiPosOnly,
 // minGP/minFPPG) genuinely mean "this player isn't a live target," so they
 // still narrow the pool BEFORE value/scarcity are computed.
+// A player traded mid-season carries a combined team field like "CHI, EDM"
+// (see nhl_player_database.py's known multi-team-row behavior) rather than
+// a single code -- an exact-match `p.t === code` missed these players in
+// BOTH directions: excluding EDM still showed them (confirmed 2026-09-05),
+// and Team Lock=EDM would have hidden them too. Check every comma-separated
+// team on the player, not just the whole string, for either case.
+function playerHasTeam(t, code){
+  if(!t || !code) return false;
+  return t===code || (t.includes(",") && t.split(",").some(part=>part.trim()===code));
+}
+function isTeamExcluded(t){
+  for(const code of state.excludeTeams){ if(playerHasTeam(t, code)) return true; }
+  return false;
+}
 function buildRows(){
   const goalie = isGoalieView();
   const pool = playerPool();
@@ -1731,7 +1745,7 @@ function buildRows(){
   let rows = [];
   for(const p of pool){
     if(state.hideDrafted && state.drafted.has(p.n)) continue;
-    if(state.excludeTeams.has(p.t)) continue;
+    if(isTeamExcluded(p.t)) continue;
     if(state.excludePlayers.has(p.n)) continue;
     // A multi-position player only gets hidden once EVERY position they're
     // eligible at is excluded -- e.g. excluding D shouldn't hide a LW/D
@@ -1743,7 +1757,7 @@ function buildRows(){
     if(state.minFPPG && (row.fppg||0) < state.minFPPG) continue;
     row.__matchesView = (goalie || state.pos==="ALL" || p.p.includes(state.pos))
       && (!q || p.n.toLowerCase().includes(q))
-      && (!state.onlyTeam || p.t === state.onlyTeam);
+      && (!state.onlyTeam || playerHasTeam(p.t, state.onlyTeam));
     rows.push(row);
   }
   applyValue(rows, goalie);
@@ -1887,7 +1901,7 @@ function computeTopAvailable(n){
   let rows = [];
   for(const p of DATA.skaters){
     if(state.hideDrafted && state.drafted.has(p.n)) continue;
-    if(state.excludeTeams.has(p.t)) continue;
+    if(isTeamExcluded(p.t)) continue;
     if(state.excludePlayers.has(p.n)) continue;
     if(state.excludePos.size && p.p.every(pp=>state.excludePos.has(pp))) continue;
     const row = computeRow(p, false);
